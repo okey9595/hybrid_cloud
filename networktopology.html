@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<!-- saved from url=(0032)http://206.189.157.50/test2.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+    <title>Vis Network | Node Styles | Label Width and Height Settings*</title>
+	<script src="./complete_files/jquery.min.js.&#45796;&#50868;&#47196;&#46300;"></script>
+	<link rel="stylesheet" href="./complete_files/style.css"> 
+    <script type="text/javascript" src="./complete_files/go.js.&#45796;&#50868;&#47196;&#46300;"></script>
+
+    
+  </head>
+
+  <body>
+ 
+  <div class="md:flex flex-col md:flex-row md:min-h-screen w-full max-w-screen-xl mx-auto">
+    
+    
+    <div class="p-4 w-full">
+
+  
+
+  <script id="code">
+    function init() {
+      var $ = go.GraphObject.make;  // for conciseness in defining templates
+
+      myDiagram =
+        $(go.Diagram, "myDiagramDiv", // must be the ID or reference to div
+          {
+            maxSelectionCount: 1, // users can select only one part at a time
+            validCycle: go.Diagram.CycleDestinationTree, // make sure users can only create trees
+            "clickCreatingTool.archetypeNodeData": { // allow double-click in background to create a new node
+              name: "(new person)",
+              title: "",
+              comments: ""
+            },
+            "clickCreatingTool.insertPart": function(loc) {  // scroll to the new node
+              var node = go.ClickCreatingTool.prototype.insertPart.call(this, loc);
+              if (node !== null) {
+                this.diagram.select(node);
+                this.diagram.commandHandler.scrollToPart(node);
+                this.diagram.commandHandler.editTextBlock(node.findObject("NAMETB"));
+              }
+              return node;
+            },
+            layout:
+              $(go.TreeLayout,
+                {
+                  treeStyle: go.TreeLayout.StyleLastParents,
+                  arrangement: go.TreeLayout.ArrangementHorizontal,
+                  // properties for most of the tree:
+                  angle: 90,
+                  layerSpacing: 35,
+                  // properties for the "last parents":
+                  alternateAngle: 90,
+                  alternateLayerSpacing: 35,
+                  alternateAlignment: go.TreeLayout.AlignmentBus,
+                  alternateNodeSpacing: 20
+                }),
+            "undoManager.isEnabled": true // enable undo & redo
+          });
+
+      // when the document is modified, add a "*" to the title and enable the "Save" button
+      myDiagram.addDiagramListener("Modified", function(e) {
+        var button = document.getElementById("SaveButton");
+        if (button) button.disabled = !myDiagram.isModified;
+        var idx = document.title.indexOf("*");
+        if (myDiagram.isModified) {
+          if (idx < 0) document.title += "*";
+        } else {
+          if (idx >= 0) document.title = document.title.substr(0, idx);
+        }
+      });
+
+      // manage boss info manually when a node or link is deleted from the diagram
+      myDiagram.addDiagramListener("SelectionDeleting", function(e) {
+        var part = e.subject.first(); // e.subject is the myDiagram.selection collection,
+        // so we'll get the first since we know we only have one selection
+        myDiagram.startTransaction("clear boss");
+        if (part instanceof go.Node) {
+          var it = part.findTreeChildrenNodes(); // find all child nodes
+          while (it.next()) { // now iterate through them and clear out the boss information
+            var child = it.value;
+            var bossText = child.findObject("boss"); // since the boss TextBlock is named, we can access it by name
+            if (bossText === null) return;
+            bossText.text = "";
+          }
+        } else if (part instanceof go.Link) {
+          var child = part.toNode;
+          var bossText = child.findObject("boss"); // since the boss TextBlock is named, we can access it by name
+          if (bossText === null) return;
+          bossText.text = "";
+        }
+        myDiagram.commitTransaction("clear boss");
+      });
+
+      var levelColors = ["#50F217", "#50F217", "#50F217", "#5133AB",
+        "#008299", "#D24726", "#008A00", "#094AB2"];
+
+      // override TreeLayout.commitNodes to also modify the background brush based on the tree depth level
+      myDiagram.layout.commitNodes = function() {
+        go.TreeLayout.prototype.commitNodes.call(myDiagram.layout);  // do the standard behavior
+        // then go through all of the vertexes and set their corresponding node's Shape.fill
+        // to a brush dependent on the TreeVertex.level value
+        myDiagram.layout.network.vertexes.each(function(v) {
+          if (v.node) {
+			
+			<!-- console.log("Apa"); -->
+			<!-- console.log(v.node.Ub); -->
+			var nama=v.node.Ub;
+            var level = v.level % (levelColors.length);
+            var color = levelColors[level];
+			if(nama == "agent2"){
+				color="#DA2A14";
+			}else if(nama == "agent3"){
+				color="#F9F50B";
+			}else if(nama == "eth0"){
+				color="#DA2A14";
+			}
+            var shape = v.node.findObject("SHAPE");
+            if (shape) shape.stroke = $(go.Brush, "Linear", { 0: color, 1: go.Brush.lightenBy(color, 0.05), start: go.Spot.Left, end: go.Spot.Right });
+          }
+        });
+      };
+
+      // when a node is double-clicked, add a child to it
+      function nodeDoubleClick(e, obj) {
+        var clicked = obj.part;
+        if (clicked !== null) {
+          var thisemp = clicked.data;
+          myDiagram.startTransaction("add employee");
+          var newemp = {
+            name: "(new person)",
+            title: "",
+            comments: "",
+            parent: thisemp.key
+          };
+          <!-- myDiagram.model.addNodeData(newemp); -->
+          <!-- myDiagram.commitTransaction("add employee"); -->
+        }
+      }
+
+      // this is used to determine feedback during drags
+      function mayWorkFor(node1, node2) {
+        if (!(node1 instanceof go.Node)) return false;  // must be a Node
+        if (node1 === node2) return false;  // cannot work for yourself
+        if (node2.isInTreeOf(node1)) return false;  // cannot work for someone who works for you
+        return true;
+      }
+
+      // This function provides a common style for most of the TextBlocks.
+      // Some of these values may be overridden in a particular TextBlock.
+      function textStyle() {
+        return { font: "9pt  Segoe UI,sans-serif", stroke: "white" };
+      }
+
+      // This converter is used by the Picture.
+      function findHeadShot(key) {
+		console.log("Image key");
+        console.log(key);
+		if(key == '90')
+			return "internet.png"
+		else if(key =='91') //zabbix server
+			return "Server.png"
+		else if(key =='92')  //haproxy
+			return "proxy server.png"
+		else if(key =='93')    //ktmsp
+			return "switch1.png"
+		else if(key =='102')   //agent2
+			return "company.png"
+		else if(key =='103')   // eht2
+			return "mail.png"
+		else if(key =='204')   // eht0
+			return "company.png"
+		else if(key =='205')   // eht2
+			return "DB.png"
+		else if(key =='206')   // eht3
+			return "company.png"
+		else if(key =='207')   // eht6
+			return "DB.png"	
+		else if(key == '208')  //dcb1
+			return "storage.png"
+		else if(key =='209')   //bridge0
+			return "storage.png"
+		else if(key =='210')   //bridge1
+			return "DB.png"
+		else if(key =='211')   //svpn0
+			return "mail.png"
+        return "icon.png"
+      }
+
+		function highlightLink(link, show) {
+        link.isHighlighted = show;
+        link.fromNode.isHighlighted = show;
+        link.toNode.isHighlighted = show;
+      }
+      // define the Node template
+	  var highlightColor = "#01FF70";
+      myDiagram.nodeTemplate =
+        $(go.Node, "Auto",
+          { doubleClick: nodeDoubleClick },
+		  {click: function(e, node) {
+				
+				  node.diagram.clearHighlighteds();
+				  node.linksConnected.each(function(l) { highlightLink(l, true); });
+				  node.isHighlighted = true;
+				  var tb = node.findObject("TEXTBLOCK");
+				  if (tb !== null) tb.stroke = highlightColor;
+            
+				console.log("cari");
+				console.log(e);
+				console.log(node);
+				if (e.clickCount === 1) {
+					if(node.nb.details != undefined){
+						alert(node.nb.details);
+					}
+					<!-- console.log(); -->
+					  
+					}
+				  },
+		  },
+          { // handle dragging a Node onto a Node to (maybe) change the reporting relationship
+            mouseDragEnter: function(e, node, prev) {
+              var diagram = node.diagram;
+              var selnode = diagram.selection.first();
+              if (!mayWorkFor(selnode, node)) return;
+              var shape = node.findObject("SHAPE");
+              if (shape) {
+                shape._prevFill = shape.fill;  // remember the original brush
+                shape.fill = "darkred";
+              }
+            },
+			<!-- mouseEnter: function(e, node) { -->
+              <!-- node.diagram.clearHighlighteds(); -->
+              <!-- node.linksConnected.each(function(l) { highlightLink(l, true); }); -->
+              <!-- node.isHighlighted = true; -->
+              <!-- var tb = node.findObject("TEXTBLOCK"); -->
+              <!-- if (tb !== null) tb.stroke = highlightColor; -->
+            <!-- }, -->
+			
+            mouseDragLeave: function(e, node, next) {
+              var shape = node.findObject("SHAPE");
+              if (shape && shape._prevFill) {
+                shape.fill = shape._prevFill;  // restore the original brush
+              }
+            },
+            mouseDrop: function(e, node) {
+              var diagram = node.diagram;
+              var selnode = diagram.selection.first();  // assume just one Node in selection
+              if (mayWorkFor(selnode, node)) {
+                // find any existing link into the selected node
+                var link = selnode.findTreeParentLink();
+                if (link !== null) {  // reconnect any existing link
+                  link.fromNode = node;
+                } else {  // else create a new link
+                  diagram.toolManager.linkingTool.insertLink(node, node.port, selnode, selnode.port);
+                }
+              }
+            }
+          },
+          // for sorting, have the Node.text be the data.name
+          new go.Binding("text", "name"),
+          // bind the Part.layerName to control the Node's layer depending on whether it isSelected
+          new go.Binding("layerName", "isSelected", function(sel) { return sel ? "Foreground" : ""; }).ofObject(),
+          // define the node's outer shape
+          $(go.Shape, "Rectangle",
+            {
+              name: "SHAPE", fill: "#333333", stroke: 'white', strokeWidth: 3.5,
+              // set the port properties:
+              portId: "", fromLinkable: true, toLinkable: true, cursor: "pointer"
+            }),
+          $(go.Panel, "Horizontal",
+            $(go.Picture,
+              {
+                name: "Picture",
+                desiredSize: new go.Size(70, 70),
+                margin: 1.5,
+              },
+              new go.Binding("source", "key", findHeadShot)),
+            // define the panel where the text will appear
+            $(go.Panel, "Table",
+              {
+                minSize: new go.Size(130, NaN),
+                maxSize: new go.Size(150, NaN),
+                margin: new go.Margin(6, 10, 0, 6),
+                defaultAlignment: go.Spot.Left
+              },
+              $(go.RowColumnDefinition, { column: 2, width: 4 }),
+              $(go.TextBlock, textStyle(),  // the name
+                {
+                  row: 0, column: 0, columnSpan: 5,
+                  font: "12pt Segoe UI,sans-serif",
+                  editable: true, isMultiline: false,
+                  minSize: new go.Size(10, 16)
+                },
+                new go.Binding("text", "name").makeTwoWay()),
+              $(go.TextBlock, "ip:", textStyle(),
+                { row: 1, column: 0 }),
+              $(go.TextBlock, textStyle(),
+                {
+                  row: 1, column: 1, columnSpan: 4,
+                  editable: true, isMultiline: false,
+                  minSize: new go.Size(10, 14),
+                  margin: new go.Margin(0, 0, 0, 3)
+                },
+                new go.Binding("text", "title").makeTwoWay()),
+              $(go.TextBlock, textStyle(),
+                { row: 2, column: 0 },
+                <!-- new go.Binding("text", "key", function(v) { return "ID: " + v; })), -->
+                new go.Binding("text", "key", function(v) { return ""; })),
+              $(go.TextBlock, textStyle(),
+                { name: "boss", row: 2, column: 3, }, // we include a name so we can access this TextBlock when deleting Nodes/Links
+                <!-- new go.Binding("text", "parent", function(v) { return "Bossx: " + v; })), -->
+                new go.Binding("text", "parent", function(v) { return ""; })),
+              $(go.TextBlock, textStyle(),  // the comments
+                {
+                  row: 3, column: 0, columnSpan: 5,
+                  font: "italic 9pt sans-serif",
+                  wrap: go.TextBlock.WrapFit,
+                  editable: true,  // by default newlines are allowed
+                  minSize: new go.Size(10, 14)
+                },
+                new go.Binding("text", "comments").makeTwoWay())
+            )  // end Table Panel
+          ) // end Horizontal Panel
+        );  // end Node
+
+      // the context menu allows users to make a position vacant,
+      // remove a role and reassign the subtree, or remove a department
+      myDiagram.nodeTemplate.contextMenu =
+        $("ContextMenu",
+          $("ContextMenuButton",
+            $(go.TextBlock, "Vacate Position"),
+            {
+              click: function(e, obj) {
+                var node = obj.part.adornedPart;
+                if (node !== null) {
+                  var thisemp = node.data;
+                  myDiagram.startTransaction("vacate");
+                  // update the key, name, and comments
+                  myDiagram.model.setDataProperty(thisemp, "name", "(Vacant)");
+                  myDiagram.model.setDataProperty(thisemp, "comments", "");
+                  myDiagram.commitTransaction("vacate");
+                }
+              }
+            }
+          ),
+          $("ContextMenuButton",
+            $(go.TextBlock, "Remove Role"),
+            {
+              click: function(e, obj) {
+                // reparent the subtree to this node's boss, then remove the node
+                var node = obj.part.adornedPart;
+                if (node !== null) {
+                  myDiagram.startTransaction("reparent remove");
+                  var chl = node.findTreeChildrenNodes();
+                  // iterate through the children and set their parent key to our selected node's parent key
+                  while (chl.next()) {
+                    var emp = chl.value;
+                    myDiagram.model.setParentKeyForNodeData(emp.data, node.findTreeParentNode().data.key);
+                  }
+                  // and now remove the selected node itself
+                  myDiagram.model.removeNodeData(node.data);
+                  myDiagram.commitTransaction("reparent remove");
+                }
+              }
+            }
+          ),
+          $("ContextMenuButton",
+            $(go.TextBlock, "Remove Department"),
+            {
+              click: function(e, obj) {
+                // remove the whole subtree, including the node itself
+                var node = obj.part.adornedPart;
+                if (node !== null) {
+                  myDiagram.startTransaction("remove dept");
+                  myDiagram.removeParts(node.findTreeParts());
+                  myDiagram.commitTransaction("remove dept");
+                }
+              }
+            }
+          )
+        );
+
+
+      // define the Link template
+      myDiagram.linkTemplate =
+        $(go.Link, {
+            routing: go.Link.Orthogonal,
+            
+          },
+          { corner: 5, relinkableFrom: true, relinkableTo: true },
+          $(go.Shape, new go.Binding("stroke", "isHighlighted",
+              function(h, shape) { return h ? highlightColor : "#ffffff"; })
+              .ofObject(),
+            new go.Binding("strokeWidth", "isHighlighted",
+              function(h) { return h ? 2 : 1; })
+              .ofObject(),{ strokeWidth: 1.5, stroke: "#F5F5F5" }));  // the link shape
+
+      // read in the JSON-format data from the "mySavedModel" element
+      <!-- load(); -->
+
+
+      // support editing the properties of the selected person in HTML
+      if (window.Inspector) myInspector = new Inspector("myInspector", myDiagram,
+        {
+          properties: {
+            "key": { readOnly: true },
+            "comments": {}
+          }
+        });
+
+      // Setup zoom to fit button
+      document.getElementById('zoomToFit').addEventListener('click', function() {
+        myDiagram.commandHandler.zoomToFit();
+      });
+
+      document.getElementById('centerRoot').addEventListener('click', function() {
+        myDiagram.scale = 1;
+        myDiagram.commandHandler.scrollToPart(myDiagram.findNodeForKey(1));
+      });
+
+    } // end init
+
+    // Show the diagram's model in JSON format
+    function save() {
+      document.getElementById("mySavedModel").value = myDiagram.model.toJson();
+      myDiagram.isModified = false;
+    }
+    function load(json) {
+      myDiagram.model = go.Model.fromJson(json);
+      // make sure new data keys are unique positive integers
+      var lastkey = 1;
+      myDiagram.model.makeUniqueKeyFunction = function(model, data) {
+        var k = data.key || lastkey;
+        while (model.findNodeDataForKey(k)) k++;
+        data.key = lastkey = k;
+        return k;
+      };
+    }
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+
+<div id="sample">
+  <div id="myDiagramDiv" style="background-color: rgb(52, 52, 60); border: 1px solid black; height: 570px; position: relative; -webkit-tap-highlight-color: rgba(255, 255, 255, 0); cursor: pointer;"><canvas tabindex="0" width="1357" height="710" style="position: absolute; top: 0px; left: 0px; z-index: 2; user-select: none; width: 1086px; height: 568px; cursor: pointer;">This text is displayed if your browser does not support the Canvas HTML element.</canvas><div style="position: absolute; overflow: auto; width: 1086px; height: 568px; z-index: 1;"><div style="position: absolute; width: 1px; height: 1px;"></div></div></div>
+  <p><button id="zoomToFit">Zoom to Fit</button> <button id="centerRoot">Center on root</button></p>
+
+  <div>
+    <div id="myInspector">
+    </div>
+  </div>
+  
+  <div>
+    <script>
+	$( document ).ready(function() {
+		console.log( "ready!" );
+	
+	var nodes = [], edges= [], alls = [];
+	var haw=0;
+	//cloud
+	var isi = { }; 
+	isi["id"] = 90;
+	isi["label"] = "";
+	isi["x"] = -300;
+	isi["y"] = -300;
+	isi["shape"] = "image";
+	isi["image"] = "http://206.189.157.50/cloud.png";
+	isi["title"] = "Cloud";
+	
+	var isim = { }; 
+	isim["key"] = 90;
+	isim["name"] = "Cloud";
+	isim["title"] = "Network";
+	isim["color"] = "#fff";
+	
+	
+	alls[haw]=isim;
+	nodes[haw]=isi;
+	haw++;
+	
+	let from=90;
+	
+	var index = 0;
+	var num = 0;
+	var next;
+	var posx= -400;
+	var posy= -100;
+	
+	fetch("http://211.43.12.199/zabbix/api_jsonrpc.php/", {
+			method: "post",
+			headers: {
+				"Content-Type": "application/json"
+			},
+			body: JSON.stringify({
+                 "jsonrpc": "2.0",
+                 "method": "host.get",
+                 "params": {
+                     "output": [
+                         "hostid",
+                         "host"
+                     ],
+                     "selectInterfaces": [
+                         "interfaceid",
+                         "ip"
+                     ]
+                 },
+                 "id": 2,
+                 "auth": "33fd977502cfa8035ca4d6303568a0d8"
+             })
+		})
+			.then((response) => {
+				return response.json();
+			})
+			.then(data => {
+
+
+				let result=data.result;
+				for (var key in result) {
+					let r=result[key];
+					<!-- console.log(r); -->
+					var host = r['host'];
+					var hostid = r['hostid'];
+					var interfaces = r['interfaces'];
+					
+					let attr={
+								"jsonrpc": "2.0",
+								"method": "graph.get",
+								"params": {
+									"output": "extend",
+									 //this is hostid 
+									"hostids": hostid,
+									"sortfield": "name"
+								},
+								"auth": "33fd977502cfa8035ca4d6303568a0d8",
+								"id": 1
+							};
+					let datax=kirimkirim(attr);
+					let res=datax.result;
+					console.log("datas");
+					
+					var details = "";
+					for(var d in res){ 
+						
+						var maa=res[d];
+						<!-- console.log(maa); -->
+						
+						var name=maa["name"];
+						var graphid=maa["graphid"];
+						var graphtype=maa["graphtype"];
+						<!-- console.log(name + " " + graphid); -->
+						details += name + " " + graphid + "\n";
+					}
+					
+					<!-- console.log("Host id for " + host + " is " + hostid); -->
+					var ip=""
+					for(var inter in interfaces){
+						let inner=interfaces[inter];
+						var interfaceid=inner['interfaceid'];
+						if(inner['ip'] == "127.0.0.1")   //?? ??? ?? ??
+							ip = "198.3.5"    
+						else
+						 ip=inner['ip'];
+						<!-- console.log(ip);  -->
+					}
+					
+					//addition
+					let ko=from + index + 1;
+					
+					var minimum={}
+					minimum["minimum"] = 120;
+					
+					var isi = { }; // or "var valueToPush = new Object();" which is the same
+					isi["id"] = ko;
+					isi["widthConstraint"] = minimum;
+					isi["label"] = host + "("+ip+")";
+					isi["x"] = posx - (200*index);
+					isi["y"] = posy;
+					isi["border"] = "#000";
+					isi["borderWidth"] = "4";
+					isi["title"] = "Details\n--------\n"+ details;
+					//<!-- nodes.push(isi); -->
+					
+					var isim = { }; 
+					isim["key"] = ko;
+					isim["name"] = host;
+					isim["title"] = ip;
+					isim["parent"] = from;
+					isim["details"] = "Details\n--------\n"+ details;
+					
+					alls[haw]=isim;
+					nodes[haw]=isi;
+					//<!-- console.log(isi); -->
+					var edge = { }; // or "var valueToPush = new Object();" which is the same
+					edge["from"] = from;
+					edge["to"] = ko;
+					edge["label"] = "You can custom this line";
+					
+					
+					
+					edges[haw-1]=edge;
+					
+					haw++;
+					index++;
+					//addition
+					var ret;
+					if(host == 'ktmsp'){
+						ret=anak(host);
+						var resultx=ret;
+						var index2=0;
+						var posx2 =  -500;
+						var posy2 =  0;
+						for(var k in resultx){
+							let individual=resultx[k]['name'];
+							let tit=resultx[k]['title'];
+							
+							
+							//addition 2
+							let ko2=200 + ((index + 1));
+							
+							var minimum={}
+							minimum["minimum"] = 120 ;
+							
+							var isi = { }; // or "var valueToPush = new Object();" which is the same
+							isi["id"] = ko2;
+							isi["widthConstraint"] = minimum;
+							isi["label"] = individual;
+							isi["x"] = posx2 - (200*index);
+							isi["y"] = posy2;
+							isi["border"] = "#000";
+							isi["borderWidth"] = "3";
+							//<!-- nodes.push(isi); -->
+							var isim = { }; 
+							isim["key"] = ko2;
+							isim["name"] = individual;
+							isim["title"] = tit;
+							isim["parent"] = ko;
+							
+							alls[haw]=isim;
+							nodes[haw]=isi;
+							//<!-- console.log(isi); -->
+							var edge = { }; // or "var valueToPush = new Object();" which is the same
+							edge["from"] = ko;
+							edge["to"] = ko2;
+							edge["label"] = "3rd layer line";
+							
+							
+							edges[haw-1]=edge;
+							
+							haw++;
+							index++;
+							//addition 2
+							
+						}
+					}else if(host == "test"){
+						<!-- ret= childoftest(host,hostid); -->
+						<!-- ret.then(function(result) { -->
+						$.ajax({
+
+							url: "http://211.43.12.199/zabbix/api_jsonrpc.php/",
+
+							type: "post",
+							async: false,
+
+							accept: "application/json",
+
+							contentType: "application/json; charset=utf-8",
+
+							data: JSON.stringify({
+							"jsonrpc": "2.0",
+							"method": "item.get",
+							"params": {
+								"output": ["lastvalue"],
+								"filter": {
+									"hostid" : hostid,
+									"name": "Haproxy_it"
+								}
+
+							},
+
+							"auth": "33fd977502cfa8035ca4d6303568a0d8",
+							"id": 1
+						}),
+
+							dataType: "json",
+
+							success: function(datax) {
+
+							// success handle
+								<!-- console.log(datax); -->
+								let res=datax.result;
+								let yong= res[0];
+								if(yong != undefined){
+									let lastvalue= yong["lastvalue"];
+									<!-- console.log(lastvalue); -->
+									var ret=newcip(lastvalue);
+									<!-- var resultx=["A","B"]; -->
+									var resultx=ret;
+									var index2=0;
+									var posx2 =  -500;
+									var posy2 =  0;
+									for(var k in resultx){
+										let individual=resultx[k];
+										
+										
+										//addition 2
+										let ko2=200 + ((index + 1));
+										
+										var minimum={}
+										minimum["minimum"] = 120 ;
+										
+										var isi = { }; // or "var valueToPush = new Object();" which is the same
+										isi["id"] = ko2;
+										isi["widthConstraint"] = minimum;
+										isi["label"] = individual;
+										isi["x"] = posx2 - (200*index);
+										isi["y"] = posy2;
+										isi["border"] = "#000";
+										isi["borderWidth"] = "3";
+										//<!-- nodes.push(isi); -->
+										var isim = { }; 
+										isim["key"] = ko2;
+										isim["name"] = individual;
+										isim["title"] = "";
+										isim["parent"] = ko;
+										
+										alls[haw]=isim;
+										nodes[haw]=isi;
+										//<!-- console.log(isi); -->
+										var edge = { }; // or "var valueToPush = new Object();" which is the same
+										edge["from"] = ko;
+										edge["to"] = ko2;
+										edge["label"] = "3rd layer line";
+										
+										
+										edges[haw-1]=edge;
+										
+										haw++;
+										index++;
+										//addition 2
+										
+									}
+								}
+
+							},
+
+							error: function(jqXHR,textStatus,errorThrown) {
+
+							// fail handle
+
+							}
+
+
+							});
+
+						
+						<!-- }); -->
+					}
+					
+					
+					
+					<!-- console.log(host);  -->
+					
+					<!-- console.log(hostid);  -->
+					
+					
+					
+					
+				}
+				
+				console.log("2nd layer");
+				<!-- console.log(nodes); -->
+				<!-- console.log(edges); -->
+				console.log(alls);
+				load({ "class": "go.TreeModel",
+  "nodeDataArray": alls
+});
+
+				myDiagram.commandHandler.zoomToFit();
+				
+				
+				
+			})
+
+	});
+	
+	async function childoftest(host,hostid){
+		return fetch("http://211.43.12.199/zabbix/api_jsonrpc.php/", {
+			method: "post",
+			headers: {
+				"Content-Type": "application/json"
+			},
+			body: JSON.stringify({
+					"jsonrpc": "2.0",
+					"method": "item.get",
+					"params": {
+						"output": ["lastvalue"],
+						"filter": {
+							"hostid" : hostid,
+							"name": "Haproxy_it"
+						}
+
+					},
+
+					"auth": "33fd977502cfa8035ca4d6303568a0d8",
+					"id": 1
+				})
+			})
+			.then((responsex) => {
+				return responsex.json();
+			})
+			.then(datax => {
+
+
+				//console.log(data); 
+				console.log("Test " + host);
+				
+				
+				<!-- console.log(datax); -->
+				var sname=[];
+				
+				let res=datax.result;
+				let yong= res[0];
+				if(yong != undefined){
+					let lastvalue= yong["lastvalue"];
+					<!-- console.log(lastvalue); -->
+					var ret=newcip(lastvalue);
+					<!-- var ip=ret["ip"]; -->
+					<!-- var servername=ret["name"]; -->
+					
+					
+					<!-- console.log("inside func"); -->
+					<!-- console.log(ret); -->
+					<!-- console.log(servername); -->
+					return ret;
+				}
+				
+				<!-- return  -->
+
+			})
+	}
+	
+	function kirimkirim(attr){
+		let balas;
+		$.ajax({
+
+			url: "http://211.43.12.199/zabbix/api_jsonrpc.php/",
+
+			type: "post",
+			async: false,
+
+			accept: "application/json",
+
+			contentType: "application/json; charset=utf-8",
+
+			data: JSON.stringify(attr),
+
+			dataType: "json",
+
+			success: function(datax) {
+				balas=datax;
+			}
+		});
+		
+		return balas;
+	}
+	
+	function anak(host){
+		var array=[];
+		var withval=[];
+		var ifnames=[];
+		var ct=0;
+		
+		let attr={
+					"jsonrpc": "2.0",
+					"method": "item.get",
+					"params": {
+					"output": ["lastvalue"],
+					"filter": {
+					"host":host,
+					"name": "ifInOctets traffic info"
+
+							 }
+
+								},
+
+								"auth": "33fd977502cfa8035ca4d6303568a0d8",
+								"id": 1
+							};
+		let datax=kirimkirim(attr);
+		
+		console.log("iyakah");
+		
+		let res=datax.result;
+		<!-- console.log(res); -->
+		let yong= res[0];
+		if(yong != undefined){
+			let lastvalue= yong["lastvalue"];
+			var parsing=JSON.parse(lastvalue);
+			for(var single in parsing){
+				var ini = parsing[single];
+				var inoctets = ini["{#IFINOCTETS}"];
+				var index = ini["{#SNMPINDEX}"];
+				
+				if(inoctets > 0 && index != 1){
+					array[ct]=inoctets;
+					withval[single]=index;
+					ct++;
+				}
+				<!-- console.log("index " + index); -->
+				<!-- console.log("inoctets " + inoctets); -->
+			}
+		}
+		
+		<!-- console.log("withval " + host); -->
+		<!-- console.log(withval); -->
+		
+		//forport
+		 attr={
+					"jsonrpc": "2.0",
+					"method": "item.get",
+					"params": {
+					"output": ["lastvalue"],
+					"filter": {
+					"host":"ktmsp",
+					"name": "portName"
+
+							 }
+
+								},
+
+								"auth": "33fd977502cfa8035ca4d6303568a0d8",
+								"id": 1
+							};
+		 datax=kirimkirim(attr);
+		
+		var start=0;
+		 res=datax.result;
+		 yong= res[0];
+		if(yong != undefined){
+			 lastvalue= yong["lastvalue"];
+			 parsing=JSON.parse(lastvalue);
+			
+			
+			for(var ix in withval){
+				var ini = parsing[ix];
+				var ifname = ini["{#IFNAME}"];
+				var index = ini["{#SNMPINDEX}"];
+				
+				ifnames[start]=ifname;
+				start++;
+			}
+		}
+		
+		//end forport
+		
+		
+		console.log("cek " + host);
+		console.log(ifnames);
+		
+		attr={
+							"jsonrpc": "2.0",
+							"method": "item.get",
+							"params": {
+							"output": ["lastvalue"],
+							"filter": {
+							"host":host,
+							"name": "ipAdEntAddr"
+
+									 }
+
+										},
+
+										"auth": "33fd977502cfa8035ca4d6303568a0d8",
+										"id": 1
+									};
+		 datax=kirimkirim(attr);
+		  res=datax.result;
+		 yong= res[0];
+		 skrg=0;
+		 var ret=[];
+		 var mulai=0;
+		if(yong != undefined){
+			let lastvalue= yong["lastvalue"];
+			
+			if(lastvalue != undefined){
+				var parsing=JSON.parse(lastvalue);
+				for(var single in parsing){
+					var ini = parsing[single];
+					var ip = ini["{#IPADENTADDR}"];
+					var index = ini["{#SNMPINDEX}"];
+					var inoctets = array[skrg];
+					var ifnamex = ifnames[skrg];
+					var withx = withval[skrg];
+					console.log(ip);
+					console.log("index " + index);
+					console.log("inoctets " + inoctets);
+					console.log("ifname " + ifnamex);
+					console.log("withval " + withx);
+					var ind={};
+					ind["name"]=ifnamex;
+					ind["title"]=ip;
+					ret[mulai]=ind;
+					mulai++;
+					skrg++;
+				}
+				
+			}
+		
+		}
+		
+		console.log(ret);
+		return ret;
+		
+	}
+	
+	
+	function anakold(host){
+		var array=[];
+		var withval=[];
+		var ifnames=[];
+		var ct=0;
+		fetch("http://211.43.12.199/zabbix/api_jsonrpc.php/", {
+				method: "post",
+				headers: {
+					"Content-Type": "application/json"
+				},
+				body: JSON.stringify({
+					"jsonrpc": "2.0",
+					"method": "item.get",
+					"params": {
+					"output": ["lastvalue"],
+					"filter": {
+					"host":host,
+					"name": "ifInOctets traffic info"
+
+							 }
+
+								},
+
+								"auth": "33fd977502cfa8035ca4d6303568a0d8",
+								"id": 1
+							})
+				})
+				.then((responsex) => {
+					return responsex.json();
+				})
+				.then(datax => {
+
+
+					//console.log(data); 
+					<!-- console.log("Res " + host); -->
+					
+					
+					let res=datax.result;
+					let yong= res[0];
+					if(yong != undefined){
+						let lastvalue= yong["lastvalue"];
+						var parsing=JSON.parse(lastvalue);
+						for(var single in parsing){
+							var ini = parsing[single];
+							var inoctets = ini["{#IFINOCTETS}"];
+							var index = ini["{#SNMPINDEX}"];
+							
+							if(inoctets > 0 && index != 1){
+								array[ct]=inoctets;
+								withval[single]=index;
+								ct++;
+							}
+							<!-- console.log("index " + index); -->
+							<!-- console.log("inoctets " + inoctets); -->
+						}
+					}
+				
+
+				})
+		
+		<!-- console.log("withval " + host); -->
+		<!-- console.log(withval); -->
+		
+		//forport
+		var start=0;
+		fetch("http://211.43.12.199/zabbix/api_jsonrpc.php/", {
+				method: "post",
+				headers: {
+					"Content-Type": "application/json"
+				},
+				body: JSON.stringify({
+					"jsonrpc": "2.0",
+					"method": "item.get",
+					"params": {
+					"output": ["lastvalue"],
+					"filter": {
+					"host":"ktmsp",
+					"name": "portName"
+
+							 }
+
+								},
+
+								"auth": "33fd977502cfa8035ca4d6303568a0d8",
+								"id": 1
+							})
+				})
+				.then((responsex) => {
+					return responsex.json();
+				})
+				.then(datax => {
+
+
+					//console.log(data); 
+					<!-- console.log("Res " + host); -->
+					
+					
+					let res=datax.result;
+					let yong= res[0];
+					if(yong != undefined){
+						let lastvalue= yong["lastvalue"];
+						var parsing=JSON.parse(lastvalue);
+						
+						
+						for(var ix in withval){
+							var ini = parsing[ix];
+							var ifname = ini["{#IFNAME}"];
+							var index = ini["{#SNMPINDEX}"];
+							
+							ifnames[start]=ifname;
+							start++;
+						}
+					}
+				
+
+				})
+		//end forport
+		
+		
+		console.log("cek " + host);
+		console.log(ifnames);
+		
+		fetch("http://211.43.12.199/zabbix/api_jsonrpc.php/", {
+						method: "post",
+						headers: {
+							"Content-Type": "application/json"
+						},
+						body: JSON.stringify({
+							"jsonrpc": "2.0",
+							"method": "item.get",
+							"params": {
+							"output": ["lastvalue"],
+							"filter": {
+							"host":host,
+							"name": "ipAdEntAddr"
+
+									 }
+
+										},
+
+										"auth": "33fd977502cfa8035ca4d6303568a0d8",
+										"id": 1
+									})
+					})
+						.then((responsex) => {
+							return responsex.json();
+						})
+						.then(datax => {
+
+
+							//console.log(data); 
+							console.log("Children of " + host);
+							<!-- console.log(datax); -->
+							
+							let res=datax.result;
+							let yong= res[0];
+							let skrg=0;
+							if(yong != undefined){
+								let lastvalue= yong["lastvalue"];
+								
+								if(lastvalue != undefined){
+									var parsing=JSON.parse(lastvalue);
+									for(var single in parsing){
+										var ini = parsing[single];
+										var ip = ini["{#IPADENTADDR}"];
+										var index = ini["{#SNMPINDEX}"];
+										var inoctets = array[skrg];
+										var ifnamex = ifnames[skrg];
+										var withx = withval[skrg];
+										console.log(ip);
+										console.log("index " + index);
+										console.log("inoctets " + inoctets);
+										console.log("ifname " + ifnamex);
+										console.log("withval " + withx);
+										skrg++;
+									}
+									
+								}
+							
+							}
+							
+							
+				
+
+						})
+	}
+	function switchdata(){
+		fetch("http://211.43.12.199/zabbix/api_jsonrpc.php/", {
+			method: "post",
+			headers: {
+				"Content-Type": "application/json"
+			},
+			body: JSON.stringify({
+                 "jsonrpc": "2.0",
+                 "method": "host.get",
+                 "params": {
+                     "output": [
+                         "hostid",
+                         "host"
+                     ],
+                     "selectInterfaces": [
+                         "interfaceid",
+                         "ip"
+                     ],
+					 "filter":{
+						 "host":"ktmsp"
+					 }
+                 },
+                 "id": 2,
+                 "auth": "33fd977502cfa8035ca4d6303568a0d8"
+             })
+		})
+			.then((response) => {
+				return response.json();
+			})
+			.then(data => {
+
+
+				//console.log(data); 
+				let result=data.result;
+				for (var key in result) {
+					console.log(result[key]); 
+				}
+	
+
+			})
+
+	}
+	
+	function newcip(pick){
+		<!-- var pick = JSONdata['result'][0]['lastvalue']; -->
+        var num = pick.lastIndexOf("backend app");
+        var tt = pick.indexOf("#------------------------------------------", num + 1);
+        var su = pick.substr(num, tt);
+        <!-- console.log(su); -->
+        test2 = su.match(/\w+\s{1,15}\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/g);
+        var arr_length = test2.length;
+        var Servername = [], ipAdress = [], labels = [];
+        //sleep(1000);
+        var index = 0;
+        var next;
+        if (arr_length != 0)
+            for (var i = 0; i < arr_length; i++) {
+                next = test2[i].indexOf(" ");
+                Servername.push(test2[i].substr(index, next));
+                ipAdress.push(test2[i].substr(next + 1));
+                <!-- console.log(Servername[i]); -->
+                <!-- console.log(ipAdress[i]); -->
+				labels.push(Servername[i] + " (" + ipAdress[i] + ")" );
+            }
+		var ret= [];
+		ret["ip"]= ipAdress;
+		ret["name"]= Servername;
+		return labels;
+	}
+	
+	 function chooseIp(JSONdata) {
+			typeof (JSONdata);
+			var pick = JSONdata['result'][0]['lastvalue'];
+			var num = pick.lastIndexOf("backend app");
+			var tt = pick.indexOf("#------------------------------------------", num + 1);
+			var su = pick.substr(num, tt);
+			console.log(su);
+			test2 = su.match(/\w+\s{1,15}\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/g);
+			var arr_length = test2.length;
+			var Servername = [], ipAdress = [], nodes = [], edges= [];
+			var haw=0;
+			//cloud
+			var isi = { }; 
+			isi["id"] = 90;
+			isi["label"] = "";
+			isi["x"] = -200;
+			isi["y"] = -400;
+			isi["shape"] = "image";
+			isi["image"] = "http://206.189.157.50/cloud.png";
+			
+			nodes[haw]=isi;
+			haw++;
+			//cloud
+			
+			let from=100;
+			var isi = { }; 
+			isi["id"] = from;
+			isi["label"] = "Haproxy";
+			isi["x"] = -300;
+			isi["y"] = -300;
+			
+			
+			
+			nodes[haw]=isi;
+			haw++;
+			//sleep(1000);
+			var index = 0;
+			var next;
+			var posx= -400;
+			var posy= -100;
+			
+			
+			if (arr_length != 0){
+				for (var i = 0; i < arr_length; i++) {
+					next = test2[i].indexOf(" ");
+					Servername.push(test2[i].substr(index, next));
+					ipAdress.push(test2[i].substr(next + 1));
+					console.log(Servername[i]);
+					console.log(ipAdress[i]);
+					let ko=from + i + 1;
+					
+					var minimum={}
+					minimum["minimum"] = 120;
+					
+					var isi = { }; // or "var valueToPush = new Object();" which is the same
+					isi["id"] = ko;
+					isi["widthConstraint"] = minimum;
+					isi["label"] = Servername[i] + " ("+ ipAdress[i] +")";
+					isi["x"] = posx - (200*i);
+					isi["y"] = posy;
+					isi["border"] = "#000";
+					isi["borderWidth"] = "4";
+					//<!-- nodes.push(isi); -->
+					nodes[haw]=isi;
+					//<!-- console.log(isi); -->
+					var edge = { }; // or "var valueToPush = new Object();" which is the same
+					edge["from"] = from;
+					edge["to"] = ko;
+					edge["label"] = "You can custom this line";
+					
+					
+					edges[haw-2]=edge;
+					
+					haw++;
+				}
+			}
+			
+			//line cloud
+			var edge = { }; // or "var valueToPush = new Object();" which is the same
+			edge["from"] = 90;
+			edge["to"] = 100;
+			edges[haw-2]=edge;
+			//line cloud
+			
+			console.log(nodes);
+			console.log(edges);
+			
+			 
+			
+			
+			
+	}
+	</script>
+    <textarea id="mySavedModel" style="display:none;">{ "class": "go.TreeModel",
+  "nodeDataArray": [
+{"key":1, "name":"Stella Payne Diazz", "title":"CEO"},
+{"key":2, "name":"Luke Warm", "title":"VP Marketing/Sales", "parent":1},
+{"key":3, "name":"Meg Meehan Hoffa", "title":"Sales", "parent":2},
+{"key":4, "name":"Peggy Flaming", "title":"VP Engineering", "parent":1},
+{"key":5, "name":"Saul Wellingood", "title":"Manufacturing", "parent":4},
+{"key":6, "name":"Al Ligori", "title":"Marketing", "parent":2},
+{"key":7, "name":"Dot Stubadd", "title":"Sales Rep", "parent":3},
+{"key":8, "name":"Les Ismore", "title":"Project Mgr", "parent":5},
+{"key":9, "name":"April Lynn Parris", "title":"Events Mgr", "parent":6},
+{"key":10, "name":"Xavier Breath", "title":"Engineering", "parent":4},
+{"key":11, "name":"Anita Hammer", "title":"Process", "parent":5},
+{"key":12, "name":"Billy Aiken", "title":"Software", "parent":10},
+{"key":13, "name":"Stan Wellback", "title":"Testing", "parent":10},
+{"key":14, "name":"Marge Innovera", "title":"Hardware", "parent":10},
+{"key":15, "name":"Evan Elpus", "title":"Quality", "parent":5},
+{"key":16, "name":"Lotta B. Essen", "title":"Sales Rep", "parent":3}
+ ]
+}
+    </textarea>
+  </div>
+</div>
+    </div>
+    <!-- * * * * * * * * * * * * * -->
+    <!--  End of GoJS sample code  -->
+  </div>
+
+
+</body></html>
